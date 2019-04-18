@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: Template
+labels:
+  template: cvp-redirect-builder
+metadata:
+  annotations:
+    description: cvp-redirect container
+    iconClass: cvp-redirect
+    tags: instant-app
+  name: cvp-redirect-builder
+objects:
+  - apiVersion: v1
+    kind: ServiceAccount
+    metadata:
+      annotations:
+      name: "cvp-redirect"
+  - apiVersion: v1
+    groupNames: null
+    kind: RoleBinding
+    metadata:
+      name: "cvp-redirect_admin"
+    roleRef:
+      name: admin
+    subjects:
+      - kind: ServiceAccount
+        name: "cvp-redirect"
+  - apiVersion: v1
+    groupNames: null
+    kind: RoleBinding
+    metadata:
+      name: "developer_admin"
+    roleRef:
+      name: admin
+    subjects:
+      - kind: User
+        name: "developer"
+  - kind: DeploymentConfig
+    apiVersion: v1
+    metadata:
+      name: "cvp-redirect"
+      creationTimestamp:
+    spec:
+      strategy:
+        type: Recreate
+      triggers:
+        - type: ImageChange
+          imageChangeParams:
+            automatic: true
+            containerNames:
+              - redirect
+            from:
+              kind: ImageStreamTag
+              name: "cvp-redirect:stable"
+              namespace: "cvp"
+            lastTriggeredImage: " "
+        - type: ConfigChange
+      replicas: 1
+      selector:
+        name: "cvp-redirect"
+      template:
+        metadata:
+          creationTimestamp:
+          labels:
+            name: "cvp-redirect"
+        spec:
+          serviceAccountName: "cvp-redirect"
+          containers:
+            - capabilities: {}
+              env:
+                - name: OPENSHIFT_ENABLE_REDIRECT_PROMPT
+                  value: 'true'
+              image: " "
+              imagePullPolicy: Always
+              name: redirect
+              readinessProbe:
+                httpGet:
+                  path: /
+                  port: 8080
+                initialDelaySeconds: 3
+                timeoutSeconds: 3
+              resources:
+                limits:
+                  cpu: "1"
+                  memory: "1Gi"
+                requests:
+                  cpu: "1"
+                  memory: "1Gi"
+              securityContext:
+                capabilities: {}
+                privileged: false
+              terminationMessagePath: /dev/termination-log
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+  - kind: Service
+    apiVersion: v1
+    metadata:
+      name: "cvp-redirect"
+      annotations:
+        service.openshift.io/infrastructure: 'true'
+      creationTimestamp:
+    spec:
+      ports:
+        - name: web
+          protocol: TCP
+          port: 80
+          targetPort: 8080
+          nodePort: 0
+      selector:
+        name: "cvp-redirect"
+      type: ClusterIP
+      sessionAffinity: None
+  - kind: Route
+    apiVersion: v1
+    metadata:
+      name: "cvp-redirect"
+      creationTimestamp:
+    spec:
+      to:
+        kind: Service
+        name: "cvp-redirect"
+      tls:
+        termination: edge
+        insecureEdgeTerminationPolicy: Redirect
+  - apiVersion: v1
+    kind: ImageStream
+    metadata:
+      annotations:
+      labels:
+      name: cvp-redirect
+    spec: {}
+  - apiVersion: v1
+    kind: BuildConfig
+    metadata:
+      name: cvp-redirect
+    spec:
+      output:
+        to:
+          kind: ImageStreamTag
+          name: cvp-redirect:latest
+      resources: {}
+      source:
+        contextDir: ${REPO_CONTEXTDIR}
+        git:
+          ref: ${REPO_REF}
+          uri: ${REPO_URL}
+        type: Git
+      strategy:
+        dockerStrategy:
+          env:
+            - name: CONTAINER_NAME
+              value: cvp-redirect
+            - name: GIT_SSL_NO_VERIFY
+              value: "true"
+        type: Docker
+      triggers:
+        - type: ConfigChange
+parameters:
+  - description: Git source URI for Jenkins S2I
+    name: REPO_URL
+    required: true
+    value: "https://github.com/scoheb/docker-nginx-redirect.git"
+  - description: Git branch/tag reference
+    name: REPO_REF
+    value: "master"
+  - description: The sub-directory inside the repository.
+    displayName: Context Directory
+    name: REPO_CONTEXTDIR
+    value: /
