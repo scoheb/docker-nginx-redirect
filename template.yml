@@ -50,7 +50,7 @@ objects:
               - redirect
             from:
               kind: ImageStreamTag
-              name: "cvp-redirect:stable"
+              name: "cvp-redirect:latest"
               namespace: "cvp"
             lastTriggeredImage: " "
         - type: ConfigChange
